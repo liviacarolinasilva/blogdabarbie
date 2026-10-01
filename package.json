@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/liviacarolinasilva/blogdabarbie#readme",
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
     "ejs": "^6.0.1",
     "express": "^5.2.1",

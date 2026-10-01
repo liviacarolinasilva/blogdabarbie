@@ -8,7 +8,7 @@ CREATE TABLE login (
     senha VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE perfis (
+CREATE TABLE perfil (
     id INT AUTO_INCREMENT PRIMARY KEY,
     login_id INT NOT NULL UNIQUE,
     biografia TEXT,
