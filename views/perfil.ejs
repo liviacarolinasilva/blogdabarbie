@@ -1,0 +1,27 @@
+<%- include('partials/header') %>
+
+    <h1>Seu universo, sua assinatura.</h1>
+    <p>Conte sua história e acompanhe as conexões que você cria por aqui.</p>
+
+    <section class="perfil-info">
+        <h2><%= usuario.nome %></h2>
+        <p><%= usuario.email %></p>
+        <p>Bem-vinda ao seu perfil!</p>
+    </section>
+
+    <section class="editar-perfil">
+        <h2>Editar meu perfil</h2>
+        <label>Nome</label>
+        <input type="text" value="<%= usuario.nome %>">
+        <label>Email</label>
+        <input type="email" value="<%= usuario.email %>">
+        <label>Biografia</label>
+        <textarea></textarea>
+        <button>Salvar alterações</button>
+    </section>
+
+    <section class="estatisticas">
+        <p><strong>0</strong><br>publicações</p>
+    </section>
+
+<%- include('partials/footer') %>
