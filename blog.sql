@@ -17,16 +17,6 @@ CREATE TABLE perfil (
     FOREIGN KEY (login_id) REFERENCES login(id)
 );
 
-CREATE TABLE seguidores (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    seguidor_id INT NOT NULL,
-    seguido_id INT NOT NULL,
-    data_inicio DATE NOT NULL,
-    FOREIGN KEY (seguidor_id) REFERENCES login(id),
-    FOREIGN KEY (seguido_id) REFERENCES login(id),
-    UNIQUE (seguidor_id, seguido_id)
-);
-
 CREATE TABLE categorias (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(100) NOT NULL,
