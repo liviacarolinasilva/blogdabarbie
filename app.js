@@ -39,8 +39,8 @@ app.get('/midias', (req, res)=>{
 app.get('/publicacao', (req, res)=>{
     res.render('publicacao');
 });
-app.get('/seguidores', (req, res)=>{
-    res.render('seguidores');
+app.get('/cadastro', (req, res)=>{
+    res.render('cadastro');
 });
 
 app.post('/login', async (req, res) => {
