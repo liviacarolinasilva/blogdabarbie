@@ -1,15 +1,28 @@
-const mysql = require('mysql2/promise');
+require('dotenv').config();
 
-const db = mysql.createPool({
-  host: 'localhost',
-  user: 'aluno',
-  password: 'ifsp', 
-  database: 'blogbarbie',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+const mysql = require('mysql2');
+const fs = require('fs');
+const path = require('path');
+
+const conexao = mysql.createConnection({
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+
+  ssl: {
+    ca: fs.readFileSync(path.join(__dirname, 'ca.pem')),
+    rejectUnauthorized: true
+    }
 });
 
-console.log('Pool de conexões MySQL configurado com sucesso!');
+conexao.connect(function (erro) {
+  if (erro) {
+    console.log('Erro ao conectar:', erro.message);
+  } else {
+    console.log('Banco de dados conectado com sucesso!');
+  }
+});
 
-module.exports = db;
+module.exports = conexao;

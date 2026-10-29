@@ -28,8 +28,9 @@ app.get('/cadastro', (req, res) => {
     res.render('cadastro');
 });
 
-app.get('/perfil', (req, res) => {
-    res.render('perfil');
+app.get('/perfil', async (req, res) => {
+    const usuario = await Usuario.findById(req.session.userId);
+    res.render('perfil', { usuario });
 });
 
 app.get('/categoria', (req, res) => {
