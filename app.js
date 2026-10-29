@@ -1,4 +1,6 @@
+require('dotenv').config();
 const express = require('express');
+const session = require('express-session');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const db = require('./db');
@@ -15,7 +17,15 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 app.use('/imagem', express.static('imagem'));
 
-
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false
+}));
+app.use((req, res, next) => {
+    res.locals.rota = req.path;
+    next();
+});
 app.get('/', (req, res) => {
     res.render('index');
 });
@@ -29,9 +39,11 @@ app.get('/cadastro', (req, res) => {
 });
 
 app.get('/perfil', (req, res) => {
-    res.render('perfil');
+    if (!req.session.usuario) {
+        return res.redirect('/login');
+    }
+    res.render('perfil', { usuario: req.session.usuario });
 });
-
 app.get('/categoria', (req, res) => {
     res.render('categoria');
 });
@@ -103,14 +115,8 @@ app.post('/login', async (req, res) => {
             });
         }
 
-        res.json({
-            mensagem: 'Login realizado com sucesso!',
-            usuario: {
-                id: usuario.id,
-                nome: usuario.nome,
-                email: usuario.email
-            }
-        });
+        req.session.usuario = { id: usuario.id, nome: usuario.nome, email: usuario.email };
+        res.redirect('/perfil');
 
     } catch (error) {
         console.error('Erro no login:', error);

@@ -12,10 +12,10 @@
 </header>
 <nav id="cabecalho">
     <p>Barbie| The Blog</p>
-    <a href="/categoria">Categorias</a>
-    <a href="/midias">Mídias</a>
-    <a href="/perfil">Perfil</a>
-    <a href="/contato">Contato</a>
+    <a href="/categoria" class="<%= rota.startsWith('/categoria') ? 'ativo' : '' %>">Categorias</a>
+    <a href="/midias"    class="<%= rota.startsWith('/midias')    ? 'ativo' : '' %>">Mídias</a>
+    <a href="/perfil" class="<%= (rota.startsWith('/perfil') || rota.startsWith('/login') || rota.startsWith('/cadastro')) ? 'ativo' : '' %>">Perfil</a>
+    <a href="/contato"   class="<%= rota.startsWith('/contato')   ? 'ativo' : '' %>">Contato</a>
 </nav>
 <body>
 
