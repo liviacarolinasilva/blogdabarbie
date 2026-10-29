@@ -180,11 +180,20 @@ body > p:not(#rosa) {
  font-weight: normal;
  color: #442033;
 }
-
 #formulario-contato form {
  display: grid;
  grid-template-columns: 1fr 1fr;
- gap: 8px 14px;
+ gap: 16px 14px;
+}
+
+#formulario-contato .campo {
+ display: flex;
+ flex-direction: column;
+ gap: 6px;
+}
+
+#formulario-contato .campo.largo {
+ grid-column: 1 / 3;
 }
 
 #formulario-contato label {
