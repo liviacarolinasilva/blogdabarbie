@@ -22,10 +22,12 @@ app.use(session({
   resave: false,
   saveUninitialized: false
 }));
+
 app.use((req, res, next) => {
     res.locals.rota = req.path;
     next();
 });
+
 app.get('/', (req, res) => {
     res.render('index');
 });
@@ -78,9 +80,38 @@ app.get('/midias', async (req, res) => {
     }
 });
 
+//curtir mídia
+app.post('/midias/:id/curtir', async (req, res) => {
+    if (!req.session.usuario) return res.redirect('/login');
+
+    const midiaId = Number(req.params.id);
+    const loginId = req.session.usuario.id;
+
+    if (!Number.isInteger(midiaId)) return res.redirect('/midias');
+
+    try {
+        const [existente] = await db.query(
+            'SELECT id FROM curtidas WHERE midia_id = ? AND login_id = ?',
+            [midiaId, loginId]
+        );
+
+        if (existente.length > 0) {
+            await db.query('DELETE FROM curtidas WHERE id = ?', [existente[0].id]);
+        } else {
+            await db.query(
+                'INSERT INTO curtidas (login_id, midia_id, data_curtida) VALUES (?, ?, NOW())',
+                [loginId, midiaId]
+            );
+        }
+
+        res.redirect(`/midias#midia-${midiaId}`);
+    } catch (error) {
+        console.error('Erro ao curtir:', error);
+        res.status(500).send('Erro ao curtir.');
+    }
+});
 
 //login
-
 app.post('/login', async (req, res) => {
     const { email, senha } = req.body;
 
@@ -126,8 +157,8 @@ app.post('/login', async (req, res) => {
         });
     }
 });
-//cadastro
 
+//cadastro
 app.post('/cadastro', async (req, res) => {
     const { nome, email, senha } = req.body;
 
@@ -178,7 +209,6 @@ app.post('/cadastro', async (req, res) => {
     }
 });
 
-
 //perfil
 app.get('/perfil/:login_id', async (req, res) => {
     const { login_id } = req.params;
@@ -214,7 +244,6 @@ app.get('/perfil/:login_id', async (req, res) => {
         });
     }
 });
-
 
 app.post('/perfil', async (req, res) => {
     const {
@@ -272,127 +301,7 @@ app.post('/perfil', async (req, res) => {
     }
 });
 
-
-//publicações
-app.get('/publicacoes', async (req, res) => {
-    try {
-        const [publicacoes] = await db.query(`
-            SELECT
-                publicacoes.*,
-                login.nome AS autor
-            FROM publicacoes
-            INNER JOIN login
-                ON publicacoes.login_id = login.id
-            ORDER BY publicacoes.data_publicacao DESC
-        `);
-
-        res.render('publicacoes', {
-            publicacoes: publicacoes
-        });
-
-    } catch (error) {
-        console.error('Erro ao buscar publicações:', error);
-
-        res.status(500).send(
-            'Erro ao carregar publicações.'
-        );
-    }
-});
-
-
-// Página de publicações
-app.get('/publicacao', async (req, res) => {
-    try {
-        const [publicacoes] = await db.query(`
-            SELECT
-                publicacoes.*,
-                login.nome AS autor
-            FROM publicacoes
-            INNER JOIN login
-                ON publicacoes.login_id = login.id
-            ORDER BY publicacoes.data_publicacao DESC
-        `);
-
-        res.render('publicacoes', {
-            publicacoes: publicacoes
-        });
-
-    } catch (error) {
-        console.error('Erro ao carregar publicações:', error);
-
-        res.status(500).send(
-            'Erro ao carregar publicações.'
-        );
-    }
-});
-
-
-// Criar publicação
-app.post('/publicacao', async (req, res) => {
-    const {
-        login_id,
-        nome,
-        imagem,
-        publicacao_texto
-    } = req.body;
-
-    if (!login_id || !nome || !publicacao_texto) {
-        return res.status(400).json({
-            mensagem: 'Preencha os campos obrigatórios.'
-        });
-    }
-
-    try {
-        await db.query(`
-            INSERT INTO publicacoes
-            (login_id, nome, data_publicacao, imagem, publicacao_texto)
-            VALUES (?, ?, NOW(), ?, ?)
-        `, [
-            login_id,
-            nome,
-            imagem || null,
-            publicacao_texto
-        ]);
-
-        res.status(201).json({
-            mensagem: 'Publicação criada com sucesso!'
-        });
-
-    } catch (error) {
-        console.error('Erro ao criar publicação:', error);
-
-        res.status(500).json({
-            mensagem: 'Erro ao criar publicação.'
-        });
-    }
-});
-
-
-// Excluir publicação
-app.delete('/publicacao/:id', async (req, res) => {
-    const { id } = req.params;
-
-    try {
-        await db.query(
-            'DELETE FROM publicacoes WHERE id = ?',
-            [id]
-        );
-
-        res.json({
-            mensagem: 'Publicação excluída com sucesso!'
-        });
-
-    } catch (error) {
-        console.error('Erro ao excluir publicação:', error);
-
-        res.status(500).json({
-            mensagem: 'Erro ao excluir publicação.'
-        });
-    }
-});
-
 //categoria
-
 app.get('/categoria/:id', async (req, res) => {
     const { id } = req.params;
 
@@ -434,129 +343,6 @@ app.get('/categoria/:id', async (req, res) => {
         });
     }
 });
-//comentarios
-
-app.post('/comentarios', async (req, res) => {
-    const {
-        login_id,
-        publicacao_id,
-        nome,
-        comentario_texto
-    } = req.body;
-
-    if (!login_id || !publicacao_id || !comentario_texto) {
-        return res.status(400).json({
-            mensagem: 'Preencha os campos obrigatórios.'
-        });
-    }
-
-    try {
-        await db.query(`
-            INSERT INTO comentarios
-            (login_id, publicacao_id, nome, data_comentario, comentario_texto)
-            VALUES (?, ?, ?, NOW(), ?)
-        `, [
-            login_id,
-            publicacao_id,
-            nome || null,
-            comentario_texto
-        ]);
-
-        res.status(201).json({
-            mensagem: 'Comentário adicionado com sucesso!'
-        });
-
-    } catch (error) {
-        console.error('Erro ao adicionar comentário:', error);
-
-        res.status(500).json({
-            mensagem: 'Erro ao adicionar comentário.'
-        });
-    }
-});
-
-
-app.delete('/comentarios/:id', async (req, res) => {
-    const { id } = req.params;
-
-    try {
-        await db.query(
-            'DELETE FROM comentarios WHERE id = ?',
-            [id]
-        );
-
-        res.json({
-            mensagem: 'Comentário excluído com sucesso!'
-        });
-
-    } catch (error) {
-        console.error('Erro ao excluir comentário:', error);
-
-        res.status(500).json({
-            mensagem: 'Erro ao excluir comentário.'
-        });
-    }
-});
-//curtidas
-app.post('/curtidas', async (req, res) => {
-    const {
-        login_id,
-        publicacao_id
-    } = req.body;
-
-    try {
-        await db.query(`
-            INSERT INTO curtidas
-            (login_id, publicacao_id, data_curtida)
-            VALUES (?, ?, NOW())
-        `, [
-            login_id,
-            publicacao_id
-        ]);
-
-        res.json({
-            mensagem: 'Publicação curtida!'
-        });
-
-    } catch (error) {
-        console.error('Erro ao curtir:', error);
-
-        res.status(400).json({
-            mensagem: 'Você já curtiu esta publicação.'
-        });
-    }
-});
-
-
-app.delete('/curtidas/:publicacao_id/:login_id', async (req, res) => {
-    const {
-        publicacao_id,
-        login_id
-    } = req.params;
-
-    try {
-        await db.query(`
-            DELETE FROM curtidas
-            WHERE publicacao_id = ?
-            AND login_id = ?
-        `, [
-            publicacao_id,
-            login_id
-        ]);
-
-        res.json({
-            mensagem: 'Curtida removida!'
-        });
-
-    } catch (error) {
-        console.error('Erro ao remover curtida:', error);
-
-        res.status(500).json({
-            mensagem: 'Erro ao remover curtida.'
-        });
-    }
-});
-
 
 //denuncias
 app.post('/denuncias', async (req, res) => {
@@ -613,7 +399,6 @@ app.get('/tags', async (req, res) => {
         });
     }
 });
-
 
 app.listen(PORT, () => {
     console.log(`Servidor rodando em http://localhost:${PORT}`);

@@ -185,7 +185,12 @@ body > p:not(#rosa) {
  grid-template-columns: 1fr 1fr;
  gap: 16px 14px;
 }
-
+.erro {
+ color: #c8005c;
+ font-size: 13px;
+ margin: 0 0 14px;
+ text-align: center;
+}
 #formulario-contato .campo {
  display: flex;
  flex-direction: column;
