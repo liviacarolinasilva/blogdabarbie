@@ -1,4 +1,5 @@
 require('dotenv').config();
+
 const express = require('express');
 const session = require('express-session');
 const cors = require('cors');
@@ -6,7 +7,7 @@ const bcrypt = require('bcrypt');
 const db = require('./db');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.set('view engine', 'ejs');
 
@@ -18,106 +19,87 @@ app.use(express.static('public'));
 app.use('/imagem', express.static('imagem'));
 
 app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false
+    secret: process.env.SESSION_SECRET || 'chave-temporaria-blog-barbie',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 1000 * 60 * 60 * 24
+    }
 }));
 
 app.use((req, res, next) => {
     res.locals.rota = req.path;
+    res.locals.usuario = req.session.usuario || null;
     next();
 });
 
+function verificarLogin(req, res, next) {
+    if (req.session.usuario) {
+        return next();
+    }
+
+    return res.redirect('/login');
+}
+
+// PÁGINAS PÚBLICAS
+
 app.get('/', (req, res) => {
+    if (req.session.usuario) {
+        return res.redirect('/perfil');
+    }
+
     res.render('index');
-});
+});;
 
 app.get('/login', (req, res) => {
-    res.render('login');
+    if (req.session.usuario) {
+        return res.redirect('/perfil');
+    }
+
+    res.render('login', { erro: null });
 });
 
 app.get('/cadastro', (req, res) => {
-    res.render('cadastro');
+    if (req.session.usuario) {
+        return res.redirect('/perfil');
+    }
+
+    res.render('cadastro', { erro: null });
 });
 
-app.get('/perfil', (req, res) => {
-    if (!req.session.usuario) {
-        return res.redirect('/login');
-    }
+// PÁGINAS PROTEGIDAS
+
+app.get('/perfil', verificarLogin, (req, res) => {
     res.render('perfil', { usuario: req.session.usuario });
 });
-app.get('/categoria', (req, res) => {
+
+app.get('/categoria', verificarLogin, (req, res) => {
     res.render('categoria');
 });
 
-app.get('/contato', (req, res) => {
+app.get('/contato', verificarLogin, (req, res) => {
     res.render('contato');
 });
 
-app.get('/denuncias', (req, res) => {
+app.get('/denuncias', verificarLogin, (req, res) => {
     res.render('denuncias');
 });
 
-app.get('/midias', async (req, res) => {
-    try {
-        const [midias] = await db.query(`
-            SELECT 
-                midias.*,
-                publicacoes.nome AS nome_publicacao
-            FROM midias
-            INNER JOIN publicacoes
-                ON midias.publicacao_id = publicacoes.id
-            ORDER BY midias.id DESC
-        `);
-
-        res.render('midias', {
-            midias: midias
-        });
-
-    } catch (error) {
-        console.error('Erro ao carregar mídias:', error);
-        res.status(500).send('Erro ao carregar mídias.');
-    }
+app.get('/midias', verificarLogin, (req, res) => {
+    res.render('midias');
 });
 
-//curtir mídia
-app.post('/midias/:id/curtir', async (req, res) => {
-    if (!req.session.usuario) return res.redirect('/login');
+// LOGIN
 
-    const midiaId = Number(req.params.id);
-    const loginId = req.session.usuario.id;
-
-    if (!Number.isInteger(midiaId)) return res.redirect('/midias');
-
-    try {
-        const [existente] = await db.query(
-            'SELECT id FROM curtidas WHERE midia_id = ? AND login_id = ?',
-            [midiaId, loginId]
-        );
-
-        if (existente.length > 0) {
-            await db.query('DELETE FROM curtidas WHERE id = ?', [existente[0].id]);
-        } else {
-            await db.query(
-                'INSERT INTO curtidas (login_id, midia_id, data_curtida) VALUES (?, ?, NOW())',
-                [loginId, midiaId]
-            );
-        }
-
-        res.redirect(`/midias#midia-${midiaId}`);
-    } catch (error) {
-        console.error('Erro ao curtir:', error);
-        res.status(500).send('Erro ao curtir.');
-    }
-});
-
-//login
 app.post('/login', async (req, res) => {
     const { email, senha } = req.body;
 
     if (!email || !senha) {
-        return res.status(400).json({
-            mensagem: 'Preencha e-mail e senha!'
+        return res.status(400).render('login', {
+            erro: 'Preencha o e-mail e a senha.'
         });
     }
 
@@ -128,49 +110,62 @@ app.post('/login', async (req, res) => {
         );
 
         if (usuarios.length === 0) {
-            return res.status(401).json({
-                mensagem: 'E-mail ou senha incorretos!'
+            return res.status(401).render('login', {
+                erro: 'E-mail ou senha incorretos.'
             });
         }
 
         const usuario = usuarios[0];
-
-        const senhaValida = await bcrypt.compare(
-            senha,
-            usuario.senha
-        );
+        const senhaValida = await bcrypt.compare(senha, usuario.senha);
 
         if (!senhaValida) {
-            return res.status(401).json({
-                mensagem: 'E-mail ou senha incorretos!'
+            return res.status(401).render('login', {
+                erro: 'E-mail ou senha incorretos.'
             });
         }
 
-        req.session.usuario = { id: usuario.id, nome: usuario.nome, email: usuario.email };
-        res.redirect('/perfil');
+        req.session.regenerate((erro) => {
+            if (erro) {
+                console.error('Erro ao criar sessão:', erro);
+                return res.status(500).send('Não foi possível iniciar sua sessão.');
+            }
+
+            req.session.usuario = {
+                id: usuario.id,
+                nome: usuario.nome,
+                email: usuario.email
+            };
+
+            req.session.save((erroSalvar) => {
+                if (erroSalvar) {
+                    console.error('Erro ao salvar sessão:', erroSalvar);
+                    return res.status(500).send('Não foi possível iniciar sua sessão.');
+                }
+
+                return res.redirect('/perfil');
+            });
+        });
 
     } catch (error) {
         console.error('Erro no login:', error);
-
-        res.status(500).json({
-            mensagem: 'Erro interno no servidor.'
-        });
+        res.status(500).send('Erro interno ao realizar login.');
     }
 });
 
-//cadastro
+// CADASTRO
+
 app.post('/cadastro', async (req, res) => {
     const { nome, email, senha } = req.body;
 
     if (!nome || !email || !senha) {
-        return res.status(400).json({
-            mensagem: 'Por favor, preencha todos os campos!'
+        return res.status(400).render('cadastro', {
+            erro: 'Preencha todos os campos.'
         });
     }
 
     if (senha.length < 6) {
-        return res.status(400).json({
-            mensagem: 'A senha deve ter pelo menos 6 caracteres.'
+        return res.status(400).render('cadastro', {
+            erro: 'A senha deve ter pelo menos 6 caracteres.'
         });
     }
 
@@ -181,37 +176,52 @@ app.post('/cadastro', async (req, res) => {
         );
 
         if (usuariosExistentes.length > 0) {
-            return res.status(400).json({
-                mensagem: 'E-mail já cadastrado!'
+            return res.status(409).render('cadastro', {
+                erro: 'Este e-mail já está cadastrado.'
             });
         }
 
         const senhaHash = await bcrypt.hash(senha, 10);
 
-        const [resultado] = await db.query(
-            `INSERT INTO login
-            (nome, email, senha)
-            VALUES (?, ?, ?)`,
+        await db.query(
+            'INSERT INTO login (nome, email, senha) VALUES (?, ?, ?)',
             [nome, email, senhaHash]
         );
 
-        res.status(201).json({
-            mensagem: 'Usuário cadastrado com sucesso!',
-            id: resultado.insertId
-        });
+        return res.redirect('/login');
 
     } catch (error) {
         console.error('Erro no cadastro:', error);
-
-        res.status(500).json({
-            mensagem: 'Erro interno no servidor.'
+        res.status(500).render('cadastro', {
+            erro: 'Erro interno ao realizar cadastro.'
         });
     }
 });
 
-//perfil
-app.get('/perfil/:login_id', async (req, res) => {
-    const { login_id } = req.params;
+// LOGOUT
+
+app.get('/logout', (req, res) => {
+    req.session.destroy((error) => {
+        if (error) {
+            console.error('Erro ao encerrar sessão:', error);
+            return res.status(500).send('Não foi possível sair da conta.');
+        }
+
+        res.clearCookie('connect.sid');
+        return res.redirect('/login');
+    });
+});
+
+// CONSULTAR O PRÓPRIO PERFIL
+
+app.get('/perfil/:login_id', verificarLogin, async (req, res) => {
+    const loginId = Number(req.params.login_id);
+
+    if (loginId !== Number(req.session.usuario.id)) {
+        return res.status(403).json({
+            mensagem: 'Acesso não permitido.'
+        });
+    }
 
     try {
         const [perfil] = await db.query(`
@@ -223,10 +233,9 @@ app.get('/perfil/:login_id', async (req, res) => {
                 perfil.foto_perfil,
                 perfil.data_nascimento
             FROM login
-            LEFT JOIN perfil
-                ON login.id = perfil.login_id
+            LEFT JOIN perfil ON login.id = perfil.login_id
             WHERE login.id = ?
-        `, [login_id]);
+        `, [loginId]);
 
         if (perfil.length === 0) {
             return res.status(404).json({
@@ -238,53 +247,46 @@ app.get('/perfil/:login_id', async (req, res) => {
 
     } catch (error) {
         console.error('Erro ao buscar perfil:', error);
-
         res.status(500).json({
             mensagem: 'Erro ao buscar perfil.'
         });
     }
 });
 
-app.post('/perfil', async (req, res) => {
-    const {
-        login_id,
-        biografia,
-        foto_perfil,
-        data_nascimento
-    } = req.body;
+// ATUALIZAR O PRÓPRIO PERFIL
+
+app.post('/perfil', verificarLogin, async (req, res) => {
+    const loginId = req.session.usuario.id;
+    const { biografia, foto_perfil, data_nascimento } = req.body;
 
     try {
         const [perfilExistente] = await db.query(
             'SELECT id FROM perfil WHERE login_id = ?',
-            [login_id]
+            [loginId]
         );
 
         if (perfilExistente.length > 0) {
-
             await db.query(`
                 UPDATE perfil
-                SET biografia = ?,
-                    foto_perfil = ?,
-                    data_nascimento = ?
+                SET biografia = ?, foto_perfil = ?, data_nascimento = ?
                 WHERE login_id = ?
             `, [
-                biografia,
-                foto_perfil,
-                data_nascimento,
-                login_id
+                biografia || null,
+                foto_perfil || null,
+                data_nascimento || null,
+                loginId
             ]);
 
         } else {
-
             await db.query(`
                 INSERT INTO perfil
                 (login_id, biografia, foto_perfil, data_nascimento)
                 VALUES (?, ?, ?, ?)
             `, [
-                login_id,
-                biografia,
-                foto_perfil,
-                data_nascimento
+                loginId,
+                biografia || null,
+                foto_perfil || null,
+                data_nascimento || null
             ]);
         }
 
@@ -294,21 +296,27 @@ app.post('/perfil', async (req, res) => {
 
     } catch (error) {
         console.error('Erro ao atualizar perfil:', error);
-
         res.status(500).json({
             mensagem: 'Erro ao atualizar perfil.'
         });
     }
 });
 
-//categoria
-app.get('/categoria/:id', async (req, res) => {
-    const { id } = req.params;
+// BUSCAR CATEGORIA E PUBLICAÇÕES
+
+app.get('/categoria/:id', verificarLogin, async (req, res) => {
+    const categoriaId = Number(req.params.id);
+
+    if (!Number.isInteger(categoriaId) || categoriaId <= 0) {
+        return res.status(400).json({
+            mensagem: 'Categoria inválida.'
+        });
+    }
 
     try {
         const [categoria] = await db.query(
             'SELECT * FROM categorias WHERE id = ?',
-            [id]
+            [categoriaId]
         );
 
         if (categoria.length === 0) {
@@ -322,52 +330,93 @@ app.get('/categoria/:id', async (req, res) => {
                 publicacoes.*,
                 login.nome AS autor
             FROM publicacoes
-            INNER JOIN login
-                ON publicacoes.login_id = login.id
+            INNER JOIN login ON publicacoes.login_id = login.id
             INNER JOIN publicacoes_categorias
                 ON publicacoes.id = publicacoes_categorias.publicacao_id
             WHERE publicacoes_categorias.categoria_id = ?
             ORDER BY publicacoes.data_publicacao DESC
-        `, [id]);
+        `, [categoriaId]);
 
         res.json({
             categoria: categoria[0],
-            publicacoes: publicacoes
+            publicacoes
         });
 
     } catch (error) {
         console.error('Erro ao buscar categoria:', error);
-
         res.status(500).json({
             mensagem: 'Erro ao carregar categoria.'
         });
     }
 });
 
-//denuncias
-app.post('/denuncias', async (req, res) => {
-    const {
-        login_id,
-        publicacao_id,
-        motivo
-    } = req.body;
+// CURTIR OU DESCURTIR MÍDIA
 
-    if (!login_id || !publicacao_id || !motivo) {
+app.post('/midias/:id/curtir', verificarLogin, async (req, res) => {
+    const midiaId = Number(req.params.id);
+    const loginId = req.session.usuario.id;
+
+    if (!Number.isInteger(midiaId) || midiaId <= 0) {
+        return res.redirect('/midias');
+    }
+
+    try {
+        const [midias] = await db.query(
+            'SELECT publicacao_id FROM midias WHERE id = ?',
+            [midiaId]
+        );
+
+        if (midias.length === 0) {
+            return res.status(404).send('Mídia não encontrada.');
+        }
+
+        const publicacaoId = midias[0].publicacao_id;
+
+        const [curtida] = await db.query(
+            'SELECT id FROM curtidas WHERE publicacao_id = ? AND login_id = ?',
+            [publicacaoId, loginId]
+        );
+
+        if (curtida.length > 0) {
+            await db.query(
+                'DELETE FROM curtidas WHERE id = ?',
+                [curtida[0].id]
+            );
+
+        } else {
+            await db.query(
+                'INSERT INTO curtidas (login_id, publicacao_id, data_curtida) VALUES (?, ?, NOW())',
+                [loginId, publicacaoId]
+            );
+        }
+
+        res.redirect(`/midias#midia-${midiaId}`);
+
+    } catch (error) {
+        console.error('Erro ao curtir:', error);
+        res.status(500).send('Erro ao registrar curtida.');
+    }
+});
+
+// ENVIAR DENÚNCIA
+
+app.post('/denuncias', verificarLogin, async (req, res) => {
+    const loginId = req.session.usuario.id;
+    const { publicacao_id, motivo } = req.body;
+    const publicacaoId = Number(publicacao_id);
+
+    if (!Number.isInteger(publicacaoId) || publicacaoId <= 0 || !motivo) {
         return res.status(400).json({
-            mensagem: 'Preencha todos os campos da denúncia.'
+            mensagem: 'Preencha corretamente todos os campos da denúncia.'
         });
     }
 
     try {
         await db.query(`
             INSERT INTO denuncias
-            (login_id, publicacao_id, motivo, status, data_denuncia)
+                (login_id, publicacao_id, motivo, status, data_denuncia)
             VALUES (?, ?, ?, 'pendente', NOW())
-        `, [
-            login_id,
-            publicacao_id,
-            motivo
-        ]);
+        `, [loginId, publicacaoId, motivo]);
 
         res.status(201).json({
             mensagem: 'Denúncia enviada com sucesso!'
@@ -375,15 +424,15 @@ app.post('/denuncias', async (req, res) => {
 
     } catch (error) {
         console.error('Erro ao enviar denúncia:', error);
-
         res.status(500).json({
             mensagem: 'Erro ao enviar denúncia.'
         });
     }
 });
 
-//tags
-app.get('/tags', async (req, res) => {
+// BUSCAR TAGS
+
+app.get('/tags', verificarLogin, async (req, res) => {
     try {
         const [tags] = await db.query(
             'SELECT * FROM tags ORDER BY nome'
@@ -393,12 +442,13 @@ app.get('/tags', async (req, res) => {
 
     } catch (error) {
         console.error('Erro ao buscar tags:', error);
-
         res.status(500).json({
             mensagem: 'Erro ao buscar tags.'
         });
     }
 });
+
+// INICIAR SERVIDOR
 
 app.listen(PORT, () => {
     console.log(`Servidor rodando em http://localhost:${PORT}`);
