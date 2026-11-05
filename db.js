@@ -18,7 +18,7 @@ const pool = mysql.createPool({
 
 pool.query('SELECT 1')
   .then(() => console.log('Banco de dados conectado com sucesso!'))
-  .catch(err => console.log('Erro ao conectar:', err.message));
+  .catch(err => console.error('ERRO COMPLETO:', err));
 
 module.exports = pool;
 

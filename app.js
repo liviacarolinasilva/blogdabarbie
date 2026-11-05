@@ -49,7 +49,7 @@ function verificarLogin(req, res, next) {
 
 app.get('/', (req, res) => {
     if (req.session.usuario) {
-        return res.redirect('/perfil');
+        return res.redirect('/home');
     }
 
     res.render('index');
@@ -75,10 +75,8 @@ app.get('/cadastro', (req, res) => {
 
 // PÁGINAS PROTEGIDAS
 
-app.get('/perfil', verificarLogin, (req, res) => {
-    res.render('perfil', {
-        usuario: req.session.usuario
-    });
+app.get('/home', verificarLogin, (req, res) => {
+    res.render('home');
 });
 
 app.get('/categoria', verificarLogin, (req, res) => {
@@ -353,21 +351,26 @@ app.get('/categoria/:id', verificarLogin, async (req, res) => {
     const id = Number(req.params.id);
 
     if (!Number.isInteger(id) || id <= 0) {
-        return res.status(400).json({
-            mensagem: 'Categoria inválida.'
-        });
+        return res.status(400).send('Categoria inválida.');
     }
 
     try {
-        const [categoria] = await db.query(
-            'SELECT * FROM categorias WHERE id = ?',
-            [id]
+        const [categorias] = await db.query(`
+            SELECT
+                categorias.*,
+                COUNT(publicacoes_categorias.publicacao_id) AS total_publicacoes
+            FROM categorias
+            LEFT JOIN publicacoes_categorias
+                ON categorias.id = publicacoes_categorias.categoria_id
+            GROUP BY categorias.id
+        `);
+
+        const categoriaSelecionada = categorias.find(
+            cat => cat.id === id
         );
 
-        if (categoria.length === 0) {
-            return res.status(404).json({
-                mensagem: 'Categoria não encontrada.'
-            });
+        if (!categoriaSelecionada) {
+            return res.status(404).send('Categoria não encontrada.');
         }
 
         const [publicacoes] = await db.query(`
@@ -383,41 +386,42 @@ app.get('/categoria/:id', verificarLogin, async (req, res) => {
             ORDER BY publicacoes.data_publicacao DESC
         `, [id]);
 
-        res.json({
-            categoria: categoria[0],
-            publicacoes: publicacoes
+        res.render('categoria', {
+            categorias,
+            categoriaSelecionada,
+            publicacoes
         });
 
     } catch (error) {
         console.error('Erro ao buscar categoria:', error);
-
-        res.status(500).json({
-            mensagem: 'Erro ao carregar categoria.'
-        });
+        res.status(500).send('Erro ao carregar categoria.');
     }
 });
 
 // CURTIR MÍDIA
+// CURTIR PUBLICAÇÕES
 
-app.post('/midias/:id/curtir', verificarLogin, async (req, res) => {
-    const midiaId = Number(req.params.id);
+app.post('/publicacoes/:id/curtir', verificarLogin, async (req, res) => {
+    const publicacaoId = Number(req.params.id);
     const loginId = req.session.usuario.id;
 
-    if (!Number.isInteger(midiaId) || midiaId <= 0) {
-        return res.redirect('/midias');
+    if (!Number.isInteger(publicacaoId) || publicacaoId <= 0) {
+        return res.status(400).json({
+            mensagem: 'Publicação inválida.'
+        });
     }
 
     try {
-        const [midias] = await db.query(
-            'SELECT publicacao_id FROM midias WHERE id = ?',
-            [midiaId]
+        const [publicacoes] = await db.query(
+            'SELECT id FROM publicacoes WHERE id = ?',
+            [publicacaoId]
         );
 
-        if (midias.length === 0) {
-            return res.status(404).send('Mídia não encontrada.');
+        if (publicacoes.length === 0) {
+            return res.status(404).json({
+                mensagem: 'Publicação não encontrada.'
+            });
         }
-
-        const publicacaoId = midias[0].publicacao_id;
 
         const [existente] = await db.query(
             `SELECT id FROM curtidas
@@ -425,12 +429,15 @@ app.post('/midias/:id/curtir', verificarLogin, async (req, res) => {
             [publicacaoId, loginId]
         );
 
+        let curtida;
+
         if (existente.length > 0) {
             await db.query(
                 'DELETE FROM curtidas WHERE id = ?',
                 [existente[0].id]
             );
 
+            curtida = false;
         } else {
             await db.query(
                 `INSERT INTO curtidas
@@ -438,17 +445,28 @@ app.post('/midias/:id/curtir', verificarLogin, async (req, res) => {
                  VALUES (?, ?, NOW())`,
                 [loginId, publicacaoId]
             );
+
+            curtida = true;
         }
 
-        res.redirect(`/midias#midia-${midiaId}`);
+        const [total] = await db.query(
+            'SELECT COUNT(*) AS total FROM curtidas WHERE publicacao_id = ?',
+            [publicacaoId]
+        );
+
+        res.json({
+            curtida,
+            total: total[0].total
+        });
 
     } catch (error) {
-        console.error('Erro ao curtir mídia:', error);
+        console.error('Erro ao curtir publicação:', error);
 
-        res.status(500).send('Erro ao registrar curtida.');
+        res.status(500).json({
+            mensagem: 'Erro ao registrar curtida.'
+        });
     }
 });
-
 // ENVIAR DENÚNCIA
 
 app.post('/denuncias', verificarLogin, async (req, res) => {

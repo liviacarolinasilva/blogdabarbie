@@ -1181,3 +1181,32 @@ footer p:nth-of-type(3) {
  }
 }
 
+/*curtida*/
+.curtidas {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 15px;
+}
+
+.btn-curtir {
+    background: none;
+    border: none;
+    color: #999;
+    font-size: 28px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-curtir.curtido {
+    color: #ff3366;
+}
+
+.btn-curtir:hover {
+    transform: scale(1.2);
+}
+
+.total-curtidas {
+    font-size: 14px;
+    color: #555;
+}

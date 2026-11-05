@@ -1,83 +1,135 @@
 <%- include('partials/header') %>
-    
+
 <section class="categoria">
 
     <p class="subtitulo">ESCOLHA SEU PRÓXIMO CAPÍTULO</p>
+
     <h1>Qual é o seu mood de hoje?</h1>
-    <p class="descricao">Da passarela ao seu cantinho favorito: encontre histórias que combinam com você.</p>
+
+    <p class="descricao">
+        Da passarela ao seu cantinho favorito: encontre histórias que combinam com você.
+    </p>
 
     <div class="categorias">
 
-        <div class="categoria-card selecionada">
-            <h2>Moda</h2>
-            <p>Looks, tendências e liberdade para se expressar.</p>
-            <small>16 histórias</small>
-        </div>
+        <% categorias.forEach(cat => { %>
 
-        <div class="categoria-card">
-            <h2>Beleza</h2>
-            <p>Rituais e descobertas para realçar quem você é.</p>
-            <small>12 histórias</small>
-        </div>
+            <a href="/categoria/<%= cat.id %>"
+               class="categoria-card <%= Number(categoriaSelecionada.id) === Number(cat.id) ? 'selecionada' : '' %>">
 
-        <div class="categoria-card">
-            <h2>Lifestyle</h2>
-            <p>Pequenas alegrias e grandes possibilidades.</p>
-            <small>15 histórias</small>
-        </div>
+                <h2><%= cat.nome %></h2>
 
-        <div class="categoria-card">
-            <h2>Decoração</h2>
-            <p>Espaços criativos com a sua personalidade.</p>
-            <small>9 histórias</small>
-        </div>
+                <p><%= cat.descricao || 'Descubra histórias desta categoria.' %></p>
 
-        <div class="categoria-card">
-            <h2>Inspiração</h2>
-            <p>Ideias e pessoas que fazem sonhar mais alto.</p>
-            <small>8 histórias</small>
-        </div>
-        
+                <small><%= cat.total_publicacoes %> histórias</small>
+
+            </a>
+
+        <% }) %>
+
     </div>
 
     <section class="publicacoes-categoria">
-        <h2>Um toque de moda</h2>
-        <p>3 histórias selecionadas • Categoria: Moda</p>
 
-        <div class="tags">
-            <span>Todos</span>
-            <span>#pinkpower</span>
-            <span>#alfaiataria</span>
-            <span>#acessórios</span>
-            <span>#verão</span>
-        </div>
+        <h2>Um toque de <%= categoriaSelecionada.nome %></h2>
+
+        <p>
+            <%= publicacoes.length %> histórias selecionadas •
+            Categoria: <%= categoriaSelecionada.nome %>
+        </p>
 
         <div class="noticias-categoria">
-            <article>
-                <img src="/imagem/midia1.jpg" alt="Barbie usando roupa rosa">
-                <small>Moda</small>
-                <h3>Rosa não é só uma cor. É uma atitude.</h3>
-                <p>Alfaiataria, acessórios e liberdade para vestir sua melhor versão.</p>
-            </article>
 
-            <article>
-                <img src="/imagem/midia2.jpg" alt="Acessórios rosas">
-                <small>Moda</small>
-                <h3>Detalhes que roubam a cena</h3>
-                <p>Bolsas, pérolas e um toque de rosa: o charme mora nos detalhes.</p>
-            </article>
+            <% if (publicacoes.length > 0) { %>
 
-            <article>
-                <img src="/imagem/midia3.jpg" alt="Look de verão">
-                <small>Moda</small>
-                <h3>Sol, mar e um look leve</h3>
-                <p>Texturas naturais e cores alegres para levar o verão com você.</p>
-            </article>
+                <% publicacoes.forEach(publicacao => { %>
+
+                    <article>
+
+                        <% if (publicacao.imagem) { %>
+                            <img src="/imagem/<%= publicacao.imagem %>"
+                                 alt="<%= publicacao.titulo %>">
+                        <% } %>
+
+                        <small><%= categoriaSelecionada.nome %></small>
+
+                        <h3><%= publicacao.titulo %></h3>
+
+                        <p><%= publicacao.conteudo %></p>
+
+                        <small>Por <%= publicacao.autor %></small>
+
+                        <div class="curtidas">
+
+                            <button
+                                type="button"
+                                class="btn-curtir <%= publicacao.usuario_curtiu ? 'curtido' : '' %>"
+                                data-id="<%= publicacao.id %>">
+
+                                ♥
+                            </button>
+
+                            <span class="total-curtidas">
+                                <%= publicacao.total_curtidas %>
+                            </span>
+
+                        </div>
+
+                    </article>
+
+                <% }) %>
+
+            <% } else { %>
+
+                <p>Nenhuma publicação encontrada nesta categoria.</p>
+
+            <% } %>
+
         </div>
+
     </section>
 
-    <p class="mensagem-final">Você viu toda a seleção. Que tal descobrir outro universo?</p>
+    <p class="mensagem-final">
+        Você viu toda a seleção. Que tal descobrir outro universo?
+    </p>
 
 </section>
+
+<script>
+
+document.querySelectorAll('.btn-curtir').forEach(botao => {
+
+    botao.addEventListener('click', async () => {
+
+        const id = botao.dataset.id;
+
+        try {
+
+            const resposta = await fetch(`/publicacoes/${id}/curtir`, {
+                method: 'POST'
+            });
+
+            const dados = await resposta.json();
+
+            if (!resposta.ok) {
+                alert(dados.mensagem);
+                return;
+            }
+
+            botao.classList.toggle('curtido', dados.curtida);
+
+            botao.nextElementSibling.textContent = dados.total;
+
+        } catch (erro) {
+
+            console.error('Erro ao curtir:', erro);
+
+        }
+
+    });
+
+});
+
+</script>
 
 <%- include('partials/footer') %>
